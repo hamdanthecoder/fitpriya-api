@@ -1,0 +1,404 @@
+const express = require('express')
+const router = express.Router()
+const verifyToken = require('../middleware/auth')
+const User = require('../models/User')
+const DailyLog = require('../models/DailyLog')
+const WeightLog = require('../models/WeightLog')
+const WorkoutHistory = require('../models/WorkoutHistory')
+const { getPersonalisedHabits } = require('../data/habits')
+
+// All routes require auth
+router.use(verifyToken)
+
+function todayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function calcStreak(lastDate, current) {
+  if (!lastDate) return 1
+  const today = todayStr()
+  if (lastDate === today) return current
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
+  return lastDate === yStr ? (current || 0) + 1 : 1
+}
+
+// ─── USER PROFILE ───────────────────────────────────────────────────────────
+
+// GET /api/users/profile
+router.get('/profile', async (req, res) => {
+  try {
+    let user = await User.findOne({ uid: req.uid })
+    if (!user) return res.json({ success: true, data: null })
+    res.json({ success: true, data: user })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// POST /api/users/profile  (create or update — upsert)
+router.post('/profile', async (req, res) => {
+  try {
+    const existing = await User.findOne({ uid: req.uid })
+    let user
+    if (existing) {
+      // Preserve activity counters on update
+      const { streakCount, bestStreak, totalWorkouts, lastWorkoutDate, disciplineScore, ...safeUpdates } = req.body
+      user = await User.findOneAndUpdate(
+        { uid: req.uid },
+        { $set: safeUpdates },
+        { new: true }
+      )
+    } else {
+      user = new User({ uid: req.uid, email: req.email, ...req.body })
+      await user.save()
+    }
+    res.json({ success: true, data: user })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// PATCH /api/users/profile  (partial update, no counter protection)
+router.patch('/profile', async (req, res) => {
+  try {
+    const user = await User.findOneAndUpdate(
+      { uid: req.uid },
+      { $set: req.body },
+      { new: true, upsert: true }
+    )
+    res.json({ success: true, data: user })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// POST /api/users/plan  (save generated plan)
+router.post('/plan', async (req, res) => {
+  try {
+    const plan = req.body
+    const updates = {
+      currentPlan:      plan,
+      dailyCalories:    plan.dailyCalories   ?? plan.targets?.calories,
+      proteinTarget:    plan.macros?.protein,
+      carbsTarget:      plan.macros?.carbs,
+      waterTarget:      plan.targets?.water,
+      workoutsPerWeek:  plan.targets?.workoutsPerWeek,
+      planGeneratedAt:  plan.generatedAt ?? new Date().toISOString(),
+    }
+    const user = await User.findOneAndUpdate(
+      { uid: req.uid },
+      { $set: updates },
+      { new: true, upsert: true }
+    )
+    res.json({ success: true, data: user })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// ─── DAILY LOG ───────────────────────────────────────────────────────────────
+
+function emptyLog(uid, date) {
+  return {
+    uid,
+    date,
+    meals: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+    totalCaloriesEaten: 0,
+    waterGlasses: 0,
+    workout: null,
+    workoutDone: false,
+    habits: [],
+    disciplineScore: 0,
+  }
+}
+
+function calcScore(log) {
+  let score = 0
+  if (log.workoutDone) score += 25
+  if ((log.waterGlasses ?? 0) >= 8) score += 15
+  if ((log.habits?.length ?? 0) >= 3) score += 25
+  if (log.mindDone) score += 15
+  if (log.challengesDone >= 1) score += 20
+  return Math.min(score, 100)
+}
+
+// GET /api/users/log/:date  (YYYY-MM-DD)
+router.get('/log/:date', async (req, res) => {
+  try {
+    let log = await DailyLog.findOne({ uid: req.uid, date: req.params.date })
+    if (!log) {
+      log = new DailyLog(emptyLog(req.uid, req.params.date))
+      await log.save()
+    }
+    res.json({ success: true, data: log })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// PATCH /api/users/log/:date  (partial update)
+router.patch('/log/:date', async (req, res) => {
+  try {
+    const updates = { ...req.body }
+    // Recompute discipline score from merged data if partial fields provided
+    const existing = await DailyLog.findOne({ uid: req.uid, date: req.params.date })
+    const merged = { ...(existing?.toObject() ?? emptyLog(req.uid, req.params.date)), ...updates }
+    merged.disciplineScore = calcScore(merged)
+
+    const log = await DailyLog.findOneAndUpdate(
+      { uid: req.uid, date: req.params.date },
+      { $set: merged },
+      { new: true, upsert: true }
+    )
+    res.json({ success: true, data: log })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// PATCH /api/users/log/:date/water
+router.patch('/log/:date/water', async (req, res) => {
+  try {
+    const { glasses } = req.body
+    const existing = await DailyLog.findOne({ uid: req.uid, date: req.params.date })
+    const base = existing?.toObject() ?? emptyLog(req.uid, req.params.date)
+    const merged = { ...base, waterGlasses: glasses }
+    merged.disciplineScore = calcScore(merged)
+
+    const log = await DailyLog.findOneAndUpdate(
+      { uid: req.uid, date: req.params.date },
+      { $set: merged },
+      { new: true, upsert: true }
+    )
+    res.json({ success: true, data: log })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// PATCH /api/users/log/:date/meal
+router.patch('/log/:date/meal', async (req, res) => {
+  try {
+    const { meal, food } = req.body
+    const existing = await DailyLog.findOne({ uid: req.uid, date: req.params.date })
+    const base = existing?.toObject() ?? emptyLog(req.uid, req.params.date)
+    const meals = { ...base.meals }
+    meals[meal] = [...(meals[meal] ?? []), food]
+    const totalCaloriesEaten = (base.totalCaloriesEaten ?? 0) + (food.calories ?? 0)
+    const merged = { ...base, meals, totalCaloriesEaten }
+    merged.disciplineScore = calcScore(merged)
+
+    const log = await DailyLog.findOneAndUpdate(
+      { uid: req.uid, date: req.params.date },
+      { $set: merged },
+      { new: true, upsert: true }
+    )
+    res.json({ success: true, data: log })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// PATCH /api/users/log/:date/workout
+router.patch('/log/:date/workout', async (req, res) => {
+  try {
+    const { workout } = req.body
+    const existing = await DailyLog.findOne({ uid: req.uid, date: req.params.date })
+    const base = existing?.toObject() ?? emptyLog(req.uid, req.params.date)
+    const merged = { ...base, workout, workoutDone: true }
+    merged.disciplineScore = calcScore(merged)
+
+    const log = await DailyLog.findOneAndUpdate(
+      { uid: req.uid, date: req.params.date },
+      { $set: merged },
+      { new: true, upsert: true }
+    )
+    res.json({ success: true, data: log })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// PATCH /api/users/log/:date/habits
+router.patch('/log/:date/habits', async (req, res) => {
+  try {
+    const { habits } = req.body
+    const existing = await DailyLog.findOne({ uid: req.uid, date: req.params.date })
+    const base = existing?.toObject() ?? emptyLog(req.uid, req.params.date)
+    const merged = { ...base, habits }
+    merged.disciplineScore = calcScore(merged)
+
+    const log = await DailyLog.findOneAndUpdate(
+      { uid: req.uid, date: req.params.date },
+      { $set: merged },
+      { new: true, upsert: true }
+    )
+    res.json({ success: true, data: log })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// GET /api/users/logs/month/:year/:month
+router.get('/logs/month/:year/:month', async (req, res) => {
+  try {
+    const { year, month } = req.params
+    const start = `${year}-${String(month).padStart(2, '0')}-01`
+    const end   = `${year}-${String(month).padStart(2, '0')}-31`
+    const logs = await DailyLog.find({ uid: req.uid, date: { $gte: start, $lte: end } })
+    const map = {}
+    logs.forEach(l => { map[l.date] = l })
+    res.json({ success: true, data: map })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// GET /api/users/logs/recent  (last 30 days)
+router.get('/logs/recent', async (req, res) => {
+  try {
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - 30)
+    const cutoffStr = cutoff.toISOString().split('T')[0]
+    const logs = await DailyLog.find({ uid: req.uid, date: { $gte: cutoffStr } }).sort({ date: -1 })
+    res.json({ success: true, data: logs })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// ─── WORKOUT HISTORY ─────────────────────────────────────────────────────────
+
+// POST /api/users/workout
+router.post('/workout', async (req, res) => {
+  try {
+    const { planId, planName, duration, caloriesBurned, exercisesCompleted, totalExercises } = req.body
+    const today = todayStr()
+
+    // Save workout history record
+    const record = new WorkoutHistory({
+      uid: req.uid,
+      date: today,
+      planId:             planId             ?? null,
+      planName:           planName           ?? null,
+      duration:           duration           ?? 0,
+      caloriesBurned:     caloriesBurned     ?? 0,
+      exercisesCompleted: exercisesCompleted ?? 0,
+      totalExercises:     totalExercises     ?? 0,
+    })
+    await record.save()
+
+    // Update user counters
+    const user = await User.findOne({ uid: req.uid })
+    const newStreak = calcStreak(user?.lastWorkoutDate, user?.streakCount ?? 0)
+    const newBest   = Math.max(user?.bestStreak ?? 0, newStreak)
+    const newTotal  = (user?.totalWorkouts ?? 0) + 1
+
+    const updatedUser = await User.findOneAndUpdate(
+      { uid: req.uid },
+      { $set: { streakCount: newStreak, bestStreak: newBest, totalWorkouts: newTotal, lastWorkoutDate: today } },
+      { new: true, upsert: true }
+    )
+
+    res.json({ success: true, data: { record, user: updatedUser, newStreak } })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// GET /api/users/workout/history
+router.get('/workout/history', async (req, res) => {
+  try {
+    const count = parseInt(req.query.count ?? '20')
+    const records = await WorkoutHistory.find({ uid: req.uid }).sort({ date: -1 }).limit(count)
+    res.json({ success: true, data: records })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// ─── WEIGHT LOGS ─────────────────────────────────────────────────────────────
+
+// POST /api/users/weight
+router.post('/weight', async (req, res) => {
+  try {
+    const { weight, date } = req.body
+    const logDate = date ?? todayStr()
+    const log = await WeightLog.findOneAndUpdate(
+      { uid: req.uid, date: logDate },
+      { $set: { weight: parseFloat(weight), unit: 'kg', loggedAt: new Date() } },
+      { new: true, upsert: true }
+    )
+    // Update current weight on profile
+    await User.findOneAndUpdate({ uid: req.uid }, { $set: { currentWeight: parseFloat(weight) } })
+    res.json({ success: true, data: log })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// GET /api/users/weight/history
+router.get('/weight/history', async (req, res) => {
+  try {
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - 56)
+    const cutoffStr = cutoff.toISOString().split('T')[0]
+    const logs = await WeightLog.find({ uid: req.uid, date: { $gte: cutoffStr } }).sort({ date: 1 })
+    res.json({ success: true, data: logs })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// ─── STATS ───────────────────────────────────────────────────────────────────
+
+// GET /api/users/stats
+router.get('/stats', async (req, res) => {
+  try {
+    const user = await User.findOne({ uid: req.uid })
+    if (!user) return res.json({ success: true, data: { streakCount: 0, bestStreak: 0, totalWorkouts: 0 } })
+    res.json({
+      success: true,
+      data: {
+        streakCount:   user.streakCount,
+        bestStreak:    user.bestStreak,
+        totalWorkouts: user.totalWorkouts,
+        lastWorkoutDate: user.lastWorkoutDate,
+        disciplineScore: user.disciplineScore,
+      },
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// DELETE /api/users/account
+router.delete('/account', async (req, res) => {
+  try {
+    await Promise.all([
+      User.deleteOne({ uid: req.uid }),
+      DailyLog.deleteMany({ uid: req.uid }),
+      WeightLog.deleteMany({ uid: req.uid }),
+      WorkoutHistory.deleteMany({ uid: req.uid }),
+    ])
+    res.json({ success: true, message: 'Account data deleted' })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// GET /api/users/habits/daily — personalised habits for today
+router.get('/habits/daily', async (req, res) => {
+  try {
+    const user = await User.findOne({ uid: req.uid }).lean()
+    const habits = getPersonalisedHabits(req.uid, user || {}, 5)
+    res.json({ success: true, data: habits })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+module.exports = router

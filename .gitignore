@@ -1,0 +1,9 @@
+node_modules/
+.env
+*.log
+.env.local
+
+# Scripts and utilities — not needed for live API, may contain credentials
+scripts/
+*.py
+test.js
