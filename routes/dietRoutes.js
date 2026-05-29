@@ -5,7 +5,7 @@ const requirePro = require('../middleware/planCheck')
 const User = require('../models/User')
 const { searchFood, generateMealPlan, suggestMeals } = require('../services/openaiService')
 
-// All diet routes require auth + pro plan
+// All diet routes require auth
 router.use(verifyToken)
 // TODO: Re-enable after testing
 // router.use(requirePro)
@@ -13,9 +13,8 @@ router.use(verifyToken)
 // ─── RATE LIMITING HELPERS ───────────────────────────────────────────────────
 
 const LIMITS = {
-  searches: 20,      // per day
-  suggestions: 5,    // per day
-  plans: 2,          // per week
+  free: { searches: 8, suggestions: 0, plans: 1 },
+  pro:  { searches: 20, suggestions: 5, plans: 2 },
 }
 
 function todayStr() {
@@ -32,6 +31,8 @@ function weekStr() {
 
 async function checkAndIncrementUsage(uid, type) {
   const user = await User.findOne({ uid }).lean()
+  const userPlan = user?.plan === 'pro' ? 'pro' : 'free'
+  const limits = LIMITS[userPlan]
   const usage = user?.dietUsage || { searches: 0, suggestions: 0, plans: 0, lastReset: null, lastPlanReset: null }
   const today = todayStr()
   const week = weekStr()
@@ -50,21 +51,30 @@ async function checkAndIncrementUsage(uid, type) {
   }
 
   // Check limit
-  if (type === 'searches' && usage.searches >= LIMITS.searches) {
-    return { allowed: false, message: `Daily search limit reached (${LIMITS.searches}/day). Try again tomorrow!` }
+  if (type === 'searches' && usage.searches >= limits.searches) {
+    const msg = userPlan === 'free'
+      ? `Free limit reached (${limits.searches}/day). Upgrade to Pro for 20 searches/day!`
+      : `Daily search limit reached (${limits.searches}/day). Try again tomorrow!`
+    return { allowed: false, message: msg, code: userPlan === 'free' ? 'FREE_LIMIT' : 'RATE_LIMITED' }
   }
-  if (type === 'suggestions' && usage.suggestions >= LIMITS.suggestions) {
-    return { allowed: false, message: `Daily suggestion limit reached (${LIMITS.suggestions}/day). Try again tomorrow!` }
+  if (type === 'suggestions' && usage.suggestions >= limits.suggestions) {
+    const msg = userPlan === 'free'
+      ? 'Smart Suggestions is a Pro feature. Upgrade to unlock!'
+      : `Daily suggestion limit reached (${limits.suggestions}/day). Try again tomorrow!`
+    return { allowed: false, message: msg, code: userPlan === 'free' ? 'PRO_REQUIRED' : 'RATE_LIMITED' }
   }
-  if (type === 'plans' && usage.plans >= LIMITS.plans) {
-    return { allowed: false, message: `Weekly plan limit reached (${LIMITS.plans}/week). Try next week!` }
+  if (type === 'plans' && usage.plans >= limits.plans) {
+    const msg = userPlan === 'free'
+      ? 'You\'ve used your free plan generation. Upgrade to Pro to regenerate anytime!'
+      : `Weekly plan limit reached (${limits.plans}/week). Try next week!`
+    return { allowed: false, message: msg, code: userPlan === 'free' ? 'FREE_LIMIT' : 'RATE_LIMITED' }
   }
 
   // Increment
   usage[type] = (usage[type] || 0) + 1
 
   await User.findOneAndUpdate({ uid }, { $set: { dietUsage: usage } })
-  return { allowed: true, remaining: LIMITS[type] - usage[type] }
+  return { allowed: true, remaining: limits[type] - usage[type] }
 }
 
 // ─── POST /api/diet/search ───────────────────────────────────────────────────
