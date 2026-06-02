@@ -143,11 +143,11 @@ router.post('/search', async (req, res) => {
 
 router.post('/meal-plan', async (req, res) => {
   try {
-    // Check limit (but don't increment yet)
-    const user = await User.findOne({ uid: req.uid }).lean() || {}
-    const userPlan = user?.plan === 'pro' ? 'pro' : 'free'
+    // Fetch user profile
+    const profile = await User.findOne({ uid: req.uid }).lean() || {}
+    const userPlan = profile?.plan === 'pro' ? 'pro' : 'free'
     const limits = LIMITS[userPlan]
-    const usage = user?.dietUsage || { searches: 0, suggestions: 0, plans: 0, lastReset: null, lastPlanReset: null }
+    const usage = profile?.dietUsage || { searches: 0, suggestions: 0, plans: 0, lastReset: null, lastPlanReset: null }
     const week = weekStr()
 
     // Reset weekly plan counter if new week
@@ -156,20 +156,21 @@ router.post('/meal-plan', async (req, res) => {
       usage.lastPlanReset = week
     }
 
-    // Check if over limit
-    if (usage.plans >= limits.plans) {
+    // Check if over limit (skip for first-ever generation)
+    const isFirstEver = !usage.lastPlanReset || usage.plans === 0
+    if (!isFirstEver && usage.plans >= limits.plans) {
       const msg = userPlan === 'free'
         ? 'You\'ve used your free plan generation. Upgrade to Pro to regenerate anytime!'
         : `Weekly plan limit reached (${limits.plans}/week). Try next week!`
       return res.status(429).json({ success: false, message: msg, code: 'RATE_LIMITED' })
     }
 
-    // Generate the plan FIRST
-    const profile = user
+    // Generate the plan
     const { plan, tokensUsed } = await generateMealPlan(profile)
 
-    // Only increment AFTER successful generation
+    // Increment ONLY after success
     usage.plans = (usage.plans || 0) + 1
+    usage.lastPlanReset = week
     await User.findOneAndUpdate({ uid: req.uid }, { $set: { dietUsage: usage } })
 
     const response = {
@@ -187,7 +188,7 @@ router.post('/meal-plan', async (req, res) => {
     })
   } catch (err) {
     console.error('[Meal Plan Error]', err.message)
-    res.status(500).json({ success: false, message: 'Meal plan generation failed. Please try again.' })
+    res.status(500).json({ success: false, message: err.message || 'Meal plan generation failed.' })
   }
 })
 
