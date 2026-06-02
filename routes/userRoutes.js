@@ -79,9 +79,13 @@ router.patch('/profile', async (req, res) => {
 router.post('/plan', async (req, res) => {
   try {
     const plan = req.body
+    // Safety clamp on calorie values
+    let dailyCal = Number(plan.dailyCalories ?? plan.targets?.calories) || 1800;
+    if (dailyCal < 1000 || dailyCal > 5000) dailyCal = 1800;
+    
     const updates = {
       currentPlan:      plan,
-      dailyCalories:    plan.dailyCalories   ?? plan.targets?.calories,
+      dailyCalories:    dailyCal,
       proteinTarget:    plan.macros?.protein,
       carbsTarget:      plan.macros?.carbs,
       waterTarget:      plan.targets?.water,

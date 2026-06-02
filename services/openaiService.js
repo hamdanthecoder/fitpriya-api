@@ -22,7 +22,7 @@ Return JSON with this exact structure:
     {
       "name_en": "English name of the food",
       "name_hi": "Hindi name (Devanagari script)",
-      "serving_description": "e.g. 2 roti + 1 bowl dal",
+      "serving_description": "e.g. 2 roti + 1 bowl dal (with quantity)",
       "serving_size_g": 250,
       "calories": 380,
       "protein": 14.0,
@@ -41,7 +41,9 @@ Rules:
 - confidence must be one of: "high", "medium", "low"
 - "high" = well-known food with reliable data
 - "medium" = estimated from similar foods
-- "low" = rough estimate, actual may vary significantly`
+- "low" = rough estimate, actual may vary significantly
+- Use standard Indian serving sizes (1 roti = ~30g, 1 bowl dal = ~150ml, 1 plate rice = ~150g)
+- If user mentions brand name, estimate based on typical packaged food nutrition`
 }
 
 async function searchFood(query, dietType) {
@@ -70,40 +72,66 @@ Focus on practical, home-cooked Indian meals with variety.
 Return ONLY valid JSON, no markdown or extra text.`
 
 function buildMealPlanPrompt(profile) {
-  const calories = profile.dailyCalories || 1800
+  let calories = Number(profile.dailyCalories) || 1800
+  if (calories < 1000 || calories > 5000) calories = 1800
   const dietType = profile.dietType || 'veg'
   const goal = profile.goal || 'maintain'
   const time = profile.availableTime || '30 min'
+  const gender = profile.gender || ''
+  const age = profile.age || ''
+  const weight = profile.currentWeight || 0
+  const targetWeight = profile.targetWeight || 0
+  const height = profile.height || 0
+  const activityLevel = profile.activityLevel || 'moderate'
+  const lifestyle = (profile.lifestyle || []).join(', ') || 'none specified'
+  const focusAreas = (profile.focusAreas || []).join(', ') || 'general fitness'
+  const proteinTarget = profile.proteinTarget || Math.round((calories * 0.25) / 4)
 
   return `Create a 7-day meal plan for this user:
-- Daily calorie target: ${calories} kcal
-- Diet type: ${dietType} (strictly follow this)
+
+USER PROFILE:
+- Gender: ${gender}, Age: ${age}
+- Current weight: ${weight}kg, Target weight: ${targetWeight}kg, Height: ${height}cm
+- Activity level: ${activityLevel}
+- Lifestyle: ${lifestyle}
+- Focus areas: ${focusAreas}
+
+NUTRITION TARGETS:
+- Daily calorie target: ${calories} kcal (MUST match this closely)
+- Daily protein target: ${proteinTarget}g
+- Diet type: ${dietType} (STRICTLY follow — no exceptions)
 - Fitness goal: ${goal}
+
+PREFERENCES:
 - Available cooking time: ${time}
-- Cuisine preference: Indian (with some variety)
+- Cuisine: Indian home-cooked meals (with some variety)
+- Practical meals that are easy to prepare
 
 Return JSON:
 {
   "days": [
     {
       "day": 1,
-      "breakfast": { "name": "Poha with peanuts", "calories": 320, "protein": 8, "carbs": 52, "fat": 10, "prep_time": "15 min" },
-      "lunch": { "name": "Rajma chawal + salad", "calories": 520, "protein": 18, "carbs": 78, "fat": 12, "prep_time": "30 min" },
-      "dinner": { "name": "Paneer tikka + 2 roti", "calories": 450, "protein": 22, "carbs": 40, "fat": 18, "prep_time": "25 min" },
-      "snack": { "name": "Fruit chaat", "calories": 150, "protein": 2, "carbs": 35, "fat": 1, "prep_time": "5 min" },
-      "total_calories": 1440
+      "breakfast": { "name": "Poha with peanuts", "calories": 450, "protein": 12, "carbs": 65, "fat": 14, "prep_time": "15 min" },
+      "lunch": { "name": "Rajma chawal + salad", "calories": 650, "protein": 22, "carbs": 90, "fat": 16, "prep_time": "30 min" },
+      "dinner": { "name": "Paneer tikka + 3 roti", "calories": 600, "protein": 28, "carbs": 55, "fat": 22, "prep_time": "25 min" },
+      "snack": { "name": "Protein shake + banana", "calories": 300, "protein": 20, "carbs": 35, "fat": 8, "prep_time": "5 min" },
+      "total_calories": ${calories}
     }
   ]
 }
 
-Rules:
-- Each day's total_calories must be within ±100 of ${calories}
+STRICT RULES:
+- Each day's total calories (sum of all 4 meals) MUST equal exactly ${calories} kcal (±30 max)
+- Distribute calories: breakfast ~${Math.round(calories * 0.25)}, lunch ~${Math.round(calories * 0.35)}, dinner ~${Math.round(calories * 0.30)}, snack ~${Math.round(calories * 0.10)}
+- Daily protein must be close to ${proteinTarget}g
 - Don't repeat the same meal within 3 days
-- Include protein-rich options (goal: ${goal})
-- All values must be numbers
-- prep_time is a string like "15 min"
+- For goal "${goal}": ${goal === 'lose' || goal === 'weight_loss' ? 'focus on high protein, moderate carbs, low fat' : goal === 'muscle' || goal === 'muscle_gain' ? 'focus on high protein, adequate carbs for energy' : 'balanced macros'}
 - For ${dietType}: NO exceptions to dietary restrictions
-- 7 days total`
+- ${weight > targetWeight ? 'User wants to LOSE weight — keep portions controlled, high fiber' : weight < targetWeight ? 'User wants to GAIN weight — include calorie-dense nutritious foods' : 'Maintain current weight — balanced approach'}
+- All values must be numbers
+- 7 days total, 4 meals per day
+- IMPORTANT: Verify each day's breakfast + lunch + dinner + snack calories sum to ${calories} before responding`
 }
 
 async function generateMealPlan(profile) {
@@ -115,20 +143,36 @@ async function generateMealPlan(profile) {
     ],
     response_format: { type: 'json_object' },
     temperature: 0.7,
-    max_tokens: 3000,
+    max_tokens: 5000,
   })
 
   const content = response.choices[0]?.message?.content
-  const parsed = JSON.parse(content)
-  const tokensUsed = response.usage?.total_tokens ?? 0
+  if (!content) {
+    throw new Error('Empty response from AI')
+  }
 
-  return { plan: parsed.days || parsed.plan?.days || [], tokensUsed }
+  let parsed
+  try {
+    parsed = JSON.parse(content)
+  } catch (e) {
+    console.error('[Meal Plan] JSON parse failed:', content.slice(0, 200))
+    throw new Error('AI returned invalid response. Please try again.')
+  }
+
+  const days = parsed.days || parsed.plan?.days || parsed.meal_plan?.days || []
+  if (!days.length) {
+    throw new Error('AI did not return a valid meal plan. Please try again.')
+  }
+
+  const tokensUsed = response.usage?.total_tokens ?? 0
+  return { plan: days, tokensUsed }
 }
 
 // ─── MEAL SUGGESTIONS ────────────────────────────────────────────────────────
 
 const SUGGEST_SYSTEM = `You are a nutrition coach helping users pick their next meal.
 Suggest practical Indian meals that fit within their remaining daily macros.
+Consider the user's diet type, goal, and lifestyle when suggesting.
 Return ONLY valid JSON, no markdown or extra text.`
 
 function buildSuggestPrompt(remaining, mealType, dietType) {
@@ -141,15 +185,20 @@ Remaining macros for today:
 - Fat: ${remaining.fat}g
 
 Diet type: ${dietType || 'any'}
+Meal type: ${mealType || 'any'}
 
 Suggest exactly 3 Indian meals that fit within these remaining macros.
-Each meal should be realistic and easy to prepare or order.
+Each meal should be:
+- Realistic and easy to prepare at home or order
+- Appropriate for ${mealType} time
+- Within the remaining calorie budget
+- Prioritize hitting protein target
 
 Return JSON:
 {
   "suggestions": [
     {
-      "name": "Meal name",
+      "name": "Meal name (specific, with quantity)",
       "calories": 380,
       "protein": 25,
       "carbs": 40,

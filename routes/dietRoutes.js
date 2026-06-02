@@ -14,7 +14,7 @@ router.use(verifyToken)
 
 const LIMITS = {
   free: { searches: 8, suggestions: 0, plans: 1 },
-  pro:  { searches: 20, suggestions: 5, plans: 2 },
+  pro:  { searches: 50, suggestions: 5, plans: 2 },
 }
 
 function todayStr() {
@@ -91,14 +91,23 @@ router.post('/search', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Query too long (max 200 characters)' })
     }
 
+    // Sanitize input — strip HTML, scripts, and dangerous characters
+    const sanitizedQuery = query.trim()
+      .replace(/<[^>]*>/g, '')           // strip HTML tags
+      .replace(/[{}$]/g, '')             // strip MongoDB operators
+      .replace(/javascript:/gi, '')      // strip JS protocol
+      .replace(/on\w+=/gi, '')           // strip event handlers
+      .substring(0, 200);
+
     // Rate limit check
     const rateCheck = await checkAndIncrementUsage(req.uid, 'searches')
     if (!rateCheck.allowed) {
       return res.status(429).json({ success: false, message: rateCheck.message, code: 'RATE_LIMITED' })
     }
 
-    const dietType = req.userProfile?.dietType || 'any'
-    const { results, tokensUsed } = await searchFood(query.trim(), dietType)
+    const user = await User.findOne({ uid: req.uid }).lean()
+    const dietType = user?.dietType || 'any'
+    const { results, tokensUsed } = await searchFood(sanitizedQuery, dietType)
 
     // Format results for frontend
     const formatted = results.map((r, i) => ({
@@ -134,14 +143,34 @@ router.post('/search', async (req, res) => {
 
 router.post('/meal-plan', async (req, res) => {
   try {
-    // Rate limit check
-    const rateCheck = await checkAndIncrementUsage(req.uid, 'plans')
-    if (!rateCheck.allowed) {
-      return res.status(429).json({ success: false, message: rateCheck.message, code: 'RATE_LIMITED' })
+    // Check limit (but don't increment yet)
+    const user = await User.findOne({ uid: req.uid }).lean() || {}
+    const userPlan = user?.plan === 'pro' ? 'pro' : 'free'
+    const limits = LIMITS[userPlan]
+    const usage = user?.dietUsage || { searches: 0, suggestions: 0, plans: 0, lastReset: null, lastPlanReset: null }
+    const week = weekStr()
+
+    // Reset weekly plan counter if new week
+    if (usage.lastPlanReset !== week) {
+      usage.plans = 0
+      usage.lastPlanReset = week
     }
 
-    const profile = req.userProfile || {}
+    // Check if over limit
+    if (usage.plans >= limits.plans) {
+      const msg = userPlan === 'free'
+        ? 'You\'ve used your free plan generation. Upgrade to Pro to regenerate anytime!'
+        : `Weekly plan limit reached (${limits.plans}/week). Try next week!`
+      return res.status(429).json({ success: false, message: msg, code: 'RATE_LIMITED' })
+    }
+
+    // Generate the plan FIRST
+    const profile = user
     const { plan, tokensUsed } = await generateMealPlan(profile)
+
+    // Only increment AFTER successful generation
+    usage.plans = (usage.plans || 0) + 1
+    await User.findOneAndUpdate({ uid: req.uid }, { $set: { dietUsage: usage } })
 
     const response = {
       generatedAt: new Date().toISOString(),
@@ -153,7 +182,7 @@ router.post('/meal-plan', async (req, res) => {
     res.json({
       success: true,
       plan: response,
-      remaining: rateCheck.remaining,
+      remaining: limits.plans - usage.plans,
       tokensUsed,
     })
   } catch (err) {
@@ -185,7 +214,7 @@ router.post('/suggest', async (req, res) => {
       fat: remainingFat || 20,
     }
 
-    const dietType = req.userProfile?.dietType || 'any'
+    const dietType = (await User.findOne({ uid: req.uid }).lean())?.dietType || 'any'
     const { suggestions, tokensUsed } = await suggestMeals(remaining, mealType, dietType)
 
     // Format suggestions
@@ -237,6 +266,20 @@ router.get('/usage', async (req, res) => {
     })
   } catch (err) {
     res.status(500).json({ success: false, message: 'Failed to get usage' })
+  }
+})
+
+// ─── POST /api/diet/reset-plan-usage (temp — reset failed plan counter) ──────
+
+router.post('/reset-plan-usage', async (req, res) => {
+  try {
+    await User.findOneAndUpdate(
+      { uid: req.uid },
+      { $set: { 'dietUsage.plans': 0 } }
+    )
+    res.json({ success: true, message: 'Plan usage reset' })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
   }
 })
 
