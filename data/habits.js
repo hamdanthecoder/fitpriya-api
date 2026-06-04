@@ -1,4 +1,4 @@
-// 105 personalized habit challenges
+// 150 personalized habit challenges
 // goals: weight_loss | muscle_gain | general_health | improve_fitness | mental_wellness | flexibility | stress_relief
 // levels: beginner | intermediate | advanced | all
 // categories: hydration | nutrition | movement | sleep | mental | productivity | recovery | yoga | fasting | morning | social
@@ -15,6 +15,11 @@ const ALL_HABITS = [
   { id: 'h008', icon: '🥒', text: 'Eat water-rich foods: cucumber, watermelon, or celery', pts: 10, category: 'hydration', goals: ['weight_loss', 'general_health'], levels: ['all'] },
   { id: 'h009', icon: '🫖', text: 'Make haldi doodh (golden milk) tonight before bed', pts: 10, category: 'hydration', goals: ['general_health', 'mental_wellness'], levels: ['all'] },
   { id: 'h010', icon: '🧊', text: 'Drink only water today — zero sugary drinks', pts: 15, category: 'hydration', goals: ['weight_loss', 'general_health', 'improve_fitness'], levels: ['all'] },
+  { id: 'h011', icon: '💧', text: 'Drink 500 ml water during your workout or walk today', pts: 10, category: 'hydration', goals: ['improve_fitness', 'muscle_gain', 'weight_loss'], levels: ['all'] },
+  { id: 'h012', icon: '🥤', text: 'Keep water visible on your desk for the next 4 hours', pts: 5, category: 'hydration', goals: ['all'], levels: ['all'] },
+  { id: 'h013', icon: '🧂', text: 'After sweating, add lemon and a tiny pinch of salt to water', pts: 10, category: 'hydration', goals: ['improve_fitness', 'general_health'], levels: ['intermediate', 'advanced'] },
+  { id: 'h014', icon: '🍉', text: 'Choose fruit or chaas instead of a cold drink today', pts: 10, category: 'hydration', goals: ['weight_loss', 'general_health'], levels: ['all'] },
+  { id: 'h015', icon: '📱', text: 'Log every glass of water in FitPriya today', pts: 10, category: 'hydration', goals: ['all'], levels: ['all'] },
 
   // ── NUTRITION (15) ──────────────────────────────────────────────────────────
   { id: 'n001', icon: '🥗', text: 'Fill half your plate with sabzi/vegetables at lunch', pts: 15, category: 'nutrition', goals: ['weight_loss', 'general_health', 'improve_fitness'], levels: ['all'] },
@@ -32,6 +37,16 @@ const ALL_HABITS = [
   { id: 'n013', icon: '🥛', text: 'Have a glass of dahi or milk with your dinner', pts: 10, category: 'nutrition', goals: ['muscle_gain', 'general_health'], levels: ['all'] },
   { id: 'n014', icon: '🫘', text: 'Add dal, rajma, or chana to one meal today for protein', pts: 10, category: 'nutrition', goals: ['weight_loss', 'muscle_gain', 'general_health'], levels: ['all'] },
   { id: 'n015', icon: '🌱', text: 'Add a handful of sprouts to your breakfast or salad', pts: 10, category: 'nutrition', goals: ['weight_loss', 'muscle_gain', 'general_health'], levels: ['all'] },
+  { id: 'n016', icon: '🍳', text: 'Add 20g+ protein to breakfast: eggs, paneer, tofu, or dal', pts: 15, category: 'nutrition', goals: ['muscle_gain', 'weight_loss', 'improve_fitness'], levels: ['all'] },
+  { id: 'n017', icon: '🥣', text: 'Eat one bowl of curd with lunch for digestion and protein', pts: 10, category: 'nutrition', goals: ['general_health', 'muscle_gain'], levels: ['all'] },
+  { id: 'n018', icon: '🥗', text: 'Start lunch with salad before rice or roti', pts: 10, category: 'nutrition', goals: ['weight_loss', 'general_health'], levels: ['all'] },
+  { id: 'n019', icon: '🧂', text: 'Avoid extra salt and namkeen snacks today', pts: 10, category: 'nutrition', goals: ['weight_loss', 'general_health'], levels: ['all'] },
+  { id: 'n020', icon: '🍛', text: 'Build one balanced plate: protein, sabzi, carb, and curd', pts: 15, category: 'nutrition', goals: ['all'], levels: ['all'] },
+  { id: 'n021', icon: '📦', text: 'Read one packaged food label before eating it', pts: 10, category: 'nutrition', goals: ['weight_loss', 'general_health'], levels: ['all'] },
+  { id: 'n022', icon: '🥜', text: 'Prepare a healthy snack box for tomorrow', pts: 10, category: 'nutrition', goals: ['weight_loss', 'muscle_gain', 'general_health'], levels: ['all'] },
+  { id: 'n023', icon: '🍚', text: 'Keep rice to one measured bowl at one meal today', pts: 10, category: 'nutrition', goals: ['weight_loss'], levels: ['all'] },
+  { id: 'n024', icon: '🥛', text: 'Add one protein drink, lassi, or milk if calories are low today', pts: 10, category: 'nutrition', goals: ['muscle_gain'], levels: ['all'] },
+  { id: 'n025', icon: '📝', text: 'Log your dinner before eating so portions stay intentional', pts: 15, category: 'nutrition', goals: ['weight_loss', 'general_health'], levels: ['all'] },
 
   // ── MOVEMENT & EXERCISE (15) ────────────────────────────────────────────────
   { id: 'm001', icon: '🚶', text: 'Walk 10,000 steps today — track on your phone', pts: 20, category: 'movement', goals: ['weight_loss', 'general_health', 'improve_fitness'], levels: ['all'] },
@@ -49,6 +64,16 @@ const ALL_HABITS = [
   { id: 'm013', icon: '💃', text: 'Dance for 15 minutes to your favourite songs', pts: 15, category: 'movement', goals: ['weight_loss', 'general_health', 'mental_wellness'], levels: ['all'] },
   { id: 'm014', icon: '🧗', text: 'Do a 45-minute outdoor workout — park, trail, or ground', pts: 20, category: 'movement', goals: ['improve_fitness', 'general_health', 'weight_loss'], levels: ['intermediate', 'advanced'] },
   { id: 'm015', icon: '🦵', text: 'Do 3 sets of lunges and glute bridges after waking', pts: 10, category: 'movement', goals: ['muscle_gain', 'weight_loss', 'improve_fitness'], levels: ['beginner', 'intermediate'] },
+  { id: 'm016', icon: '🚶', text: 'Take a 5-minute walk after each main meal today', pts: 15, category: 'movement', goals: ['weight_loss', 'general_health'], levels: ['all'] },
+  { id: 'm017', icon: '🪑', text: 'Do 3 sets of 12 chair squats with slow control', pts: 10, category: 'movement', goals: ['general_health', 'improve_fitness'], levels: ['beginner'] },
+  { id: 'm018', icon: '💪', text: 'Do 3 sets of incline push-ups on a table or wall', pts: 10, category: 'movement', goals: ['muscle_gain', 'improve_fitness'], levels: ['beginner'] },
+  { id: 'm019', icon: '⏱️', text: 'Do a 12-minute EMOM: squats, push-ups, plank, rest', pts: 20, category: 'movement', goals: ['improve_fitness', 'weight_loss'], levels: ['intermediate', 'advanced'] },
+  { id: 'm020', icon: '🧍', text: 'Stand for 10 minutes every hour during work today', pts: 10, category: 'movement', goals: ['general_health', 'weight_loss'], levels: ['all'] },
+  { id: 'm021', icon: '🦶', text: 'Do 50 calf raises while brushing or waiting', pts: 10, category: 'movement', goals: ['improve_fitness', 'general_health'], levels: ['all'] },
+  { id: 'm022', icon: '🧘', text: 'Hold a deep squat for 2 minutes total today', pts: 10, category: 'movement', goals: ['flexibility', 'improve_fitness'], levels: ['all'] },
+  { id: 'm023', icon: '🏃', text: 'Add 6 short 20-second fast intervals to your walk', pts: 15, category: 'movement', goals: ['weight_loss', 'improve_fitness'], levels: ['intermediate', 'advanced'] },
+  { id: 'm024', icon: '🎒', text: 'Walk with light backpack weight for 15 minutes', pts: 15, category: 'movement', goals: ['improve_fitness', 'muscle_gain'], levels: ['intermediate', 'advanced'] },
+  { id: 'm025', icon: '🧹', text: 'Do 20 minutes of active housework without long breaks', pts: 10, category: 'movement', goals: ['general_health', 'weight_loss'], levels: ['all'] },
 
   // ── SLEEP & RECOVERY (10) ───────────────────────────────────────────────────
   { id: 's001', icon: '💤', text: 'Be in bed by 10:30 PM for 7+ hours of sleep', pts: 20, category: 'sleep', goals: ['all'], levels: ['all'] },
@@ -61,6 +86,11 @@ const ALL_HABITS = [
   { id: 's008', icon: '⏰', text: 'Wake up at the exact same time as yesterday', pts: 10, category: 'sleep', goals: ['all'], levels: ['all'] },
   { id: 's009', icon: '🌅', text: 'Get bright natural sunlight in your first hour awake', pts: 15, category: 'sleep', goals: ['general_health', 'mental_wellness'], levels: ['all'] },
   { id: 's010', icon: '🍵', text: 'Drink ashwagandha milk or chamomile tea 30 min before bed', pts: 10, category: 'sleep', goals: ['mental_wellness', 'general_health'], levels: ['all'] },
+  { id: 's011', icon: '🌡️', text: 'Keep your room cool and dark before sleeping', pts: 10, category: 'sleep', goals: ['general_health', 'mental_wellness'], levels: ['all'] },
+  { id: 's012', icon: '🧺', text: 'Prepare clothes and water bottle tonight for tomorrow', pts: 10, category: 'sleep', goals: ['all'], levels: ['all'] },
+  { id: 's013', icon: '☕', text: 'No caffeine after 3 PM today', pts: 15, category: 'sleep', goals: ['mental_wellness', 'general_health'], levels: ['all'] },
+  { id: 's014', icon: '📝', text: 'Write tomorrow\'s top 3 tasks before bed to clear your mind', pts: 10, category: 'sleep', goals: ['mental_wellness', 'stress_relief'], levels: ['all'] },
+  { id: 's015', icon: '🛌', text: 'Get into bed 15 minutes earlier than usual tonight', pts: 10, category: 'sleep', goals: ['all'], levels: ['all'] },
 
   // ── MENTAL HEALTH & MINDFULNESS (15) ────────────────────────────────────────
   { id: 'mh01', icon: '🧘', text: 'Meditate for 10 minutes in the morning before anything else', pts: 15, category: 'mental', goals: ['mental_wellness', 'stress_relief', 'general_health'], levels: ['all'] },
@@ -78,6 +108,11 @@ const ALL_HABITS = [
   { id: 'mh13', icon: '📚', text: 'Read 15 minutes of a self-improvement or health book', pts: 10, category: 'mental', goals: ['mental_wellness', 'general_health'], levels: ['all'] },
   { id: 'mh14', icon: '🧠', text: 'Do a digital detox for 2 hours this afternoon', pts: 15, category: 'mental', goals: ['mental_wellness', 'stress_relief'], levels: ['all'] },
   { id: 'mh15', icon: '💆', text: 'Give yourself a 5-minute head or shoulder massage', pts: 10, category: 'mental', goals: ['mental_wellness', 'stress_relief'], levels: ['all'] },
+  { id: 'mh16', icon: '🌬️', text: 'Do 10 slow breaths before opening any social app', pts: 10, category: 'mental', goals: ['mental_wellness', 'stress_relief'], levels: ['all'] },
+  { id: 'mh17', icon: '📝', text: 'Write one worry and one action you can take today', pts: 10, category: 'mental', goals: ['mental_wellness', 'stress_relief'], levels: ['all'] },
+  { id: 'mh18', icon: '🔕', text: 'Put your phone away during one full meal', pts: 10, category: 'mental', goals: ['mental_wellness', 'general_health'], levels: ['all'] },
+  { id: 'mh19', icon: '🙂', text: 'Spend 5 minutes noticing what already went well today', pts: 5, category: 'mental', goals: ['mental_wellness', 'general_health'], levels: ['all'] },
+  { id: 'mh20', icon: '🚶', text: 'Take a quiet walk with no music or phone for 10 minutes', pts: 10, category: 'mental', goals: ['mental_wellness', 'stress_relief'], levels: ['all'] },
 
   // ── PRODUCTIVITY & PLANNING (10) ────────────────────────────────────────────
   { id: 'p001', icon: '📝', text: 'Write your top 3 health priorities for tomorrow before bed', pts: 10, category: 'productivity', goals: ['all'], levels: ['all'] },
@@ -97,6 +132,11 @@ const ALL_HABITS = [
   { id: 'r003', icon: '🌊', text: 'Contrast shower: hot 30s → cold 30s, repeat 5 times', pts: 15, category: 'recovery', goals: ['improve_fitness', 'general_health'], levels: ['intermediate', 'advanced'] },
   { id: 'r004', icon: '😌', text: 'Schedule a full rest day and honour it — recovery is training', pts: 15, category: 'recovery', goals: ['muscle_gain', 'improve_fitness'], levels: ['all'] },
   { id: 'r005', icon: '🛏️', text: 'Do light stretching for 10 minutes as active recovery', pts: 10, category: 'recovery', goals: ['muscle_gain', 'improve_fitness', 'flexibility'], levels: ['all'] },
+  { id: 'r006', icon: '🦵', text: 'Stretch calves, quads, and hamstrings after your workout', pts: 10, category: 'recovery', goals: ['improve_fitness', 'muscle_gain', 'flexibility'], levels: ['all'] },
+  { id: 'r007', icon: '🧘', text: 'Do 5 minutes of nasal breathing after training', pts: 10, category: 'recovery', goals: ['improve_fitness', 'mental_wellness'], levels: ['all'] },
+  { id: 'r008', icon: '🧴', text: 'Massage sore muscles for 5 minutes with slow pressure', pts: 10, category: 'recovery', goals: ['muscle_gain', 'improve_fitness'], levels: ['all'] },
+  { id: 'r009', icon: '📉', text: 'Keep today\'s workout light if your body feels unusually tired', pts: 10, category: 'recovery', goals: ['general_health', 'improve_fitness'], levels: ['all'] },
+  { id: 'r010', icon: '🍽️', text: 'Eat a protein-rich recovery meal within 2 hours after training', pts: 15, category: 'recovery', goals: ['muscle_gain', 'improve_fitness'], levels: ['all'] },
 
   // ── YOGA & FLEXIBILITY (10) ─────────────────────────────────────────────────
   { id: 'y001', icon: '🧘', text: 'Do 5 rounds of Surya Namaskar (Sun Salutation)', pts: 20, category: 'yoga', goals: ['flexibility', 'general_health', 'weight_loss'], levels: ['all'] },
@@ -116,6 +156,11 @@ const ALL_HABITS = [
   { id: 'f003', icon: '🍽️', text: 'Eat only within an 8-hour window today (16:8 IF)', pts: 20, category: 'fasting', goals: ['weight_loss', 'general_health'], levels: ['intermediate', 'advanced'] },
   { id: 'f004', icon: '🌿', text: 'Have warm jeera/ajwain water on empty stomach in morning', pts: 10, category: 'fasting', goals: ['weight_loss', 'general_health'], levels: ['all'] },
   { id: 'f005', icon: '🥤', text: 'Skip the evening snack — let your gut rest', pts: 15, category: 'fasting', goals: ['weight_loss', 'general_health'], levels: ['intermediate', 'advanced'] },
+  { id: 'f006', icon: '⏰', text: 'Keep a 12-hour overnight food gap today', pts: 10, category: 'fasting', goals: ['weight_loss', 'general_health'], levels: ['beginner', 'intermediate'] },
+  { id: 'f007', icon: '🍽️', text: 'Close your eating window 2 hours before bedtime', pts: 10, category: 'fasting', goals: ['weight_loss', 'general_health'], levels: ['all'] },
+  { id: 'f008', icon: '🥤', text: 'Break your fast with protein, not sweets or fried food', pts: 15, category: 'fasting', goals: ['weight_loss', 'general_health'], levels: ['all'] },
+  { id: 'f009', icon: '📝', text: 'Write your fasting start and end time before beginning', pts: 10, category: 'fasting', goals: ['weight_loss', 'general_health'], levels: ['all'] },
+  { id: 'f010', icon: '🌿', text: 'Keep fasting gentle today: stop if you feel dizzy or unwell', pts: 5, category: 'fasting', goals: ['weight_loss', 'general_health'], levels: ['all'] },
 
   // ── MORNING ROUTINES (5) ─────────────────────────────────────────────────────
   { id: 'mr01', icon: '🌅', text: 'Complete a 5-step morning routine before touching your phone', pts: 20, category: 'morning', goals: ['all'], levels: ['all'] },
@@ -209,21 +254,28 @@ function getPersonalisedHabits(uid, profile, count = 5) {
   const filtered = filterHabits(profile);
   if (!filtered.length) return ALL_HABITS.slice(0, count);
 
-  // Sort: focus-area matches first, then rest (stable order within each group)
-  const prioritised = [
-    ...filtered.filter(h => h._score > 1),
-    ...filtered.filter(h => h._score === 1),
-  ];
-
   const day     = getDayOfYear();
   const seed    = hashStr(uid);
-  const start   = (day * 7 + seed) % prioritised.length;
+  const focus   = filtered.filter(h => h._score > 1);
+  const regular = filtered.filter(h => h._score === 1);
+  const focusTarget = Math.min(2, count, focus.length);
 
   const result = [];
-  for (let i = 0; i < count; i++) {
-    const habit = prioritised[(start + i) % prioritised.length];
-    result.push({ id: habit.id, icon: habit.icon, text: habit.text, pts: habit.pts, category: habit.category });
+  const used = new Set();
+
+  function addFrom(pool, target, offset) {
+    if (!pool.length) return;
+    const start = (day * 7 + seed + offset) % pool.length;
+    for (let i = 0; i < pool.length && result.length < target; i++) {
+      const habit = pool[(start + i) % pool.length];
+      if (used.has(habit.id)) continue;
+      used.add(habit.id);
+      result.push({ id: habit.id, icon: habit.icon, text: habit.text, pts: habit.pts, category: habit.category });
+    }
   }
+
+  addFrom(focus, focusTarget, 0);
+  addFrom([...regular, ...focus], count, focusTarget * 13);
   return result;
 }
 

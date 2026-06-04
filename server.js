@@ -9,6 +9,7 @@ const connectDB = require('./config/database')
 const foodRoutes = require('./routes/foodRoutes')
 const userRoutes = require('./routes/userRoutes')
 const dietRoutes = require('./routes/dietRoutes')
+const exerciseRoutes = require('./routes/exerciseRoutes')
 
 const app = express()
 
@@ -29,6 +30,7 @@ app.use('/api/', limiter)
 app.use('/api/foods', foodRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/diet', dietRoutes)
+app.use('/api/exercises', exerciseRoutes)
 
 app.get('/health', (req, res) => {
   res.json({
@@ -36,17 +38,6 @@ app.get('/health', (req, res) => {
     database: 'MongoDB Atlas',
     timestamp: new Date()
   })
-})
-
-// Temp: reset all users' plan usage (remove this after fixing)
-app.get('/reset-plans', async (req, res) => {
-  try {
-    const User = require('./models/User')
-    await User.updateMany({}, { $set: { 'dietUsage.plans': 0 } })
-    res.json({ success: true, message: 'All plan counters reset' })
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message })
-  }
 })
 
 app.use((req, res) => {
