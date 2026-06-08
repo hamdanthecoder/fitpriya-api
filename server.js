@@ -7,6 +7,7 @@ require('dotenv').config()
 
 const connectDB = require('./config/database')
 const foodRoutes = require('./routes/foodRoutes')
+const authRoutes = require('./routes/authRoutes')
 const userRoutes = require('./routes/userRoutes')
 const dietRoutes = require('./routes/dietRoutes')
 const exerciseRoutes = require('./routes/exerciseRoutes')
@@ -28,6 +29,7 @@ const limiter = rateLimit({
 app.use('/api/', limiter)
 
 app.use('/api/foods', foodRoutes)
+app.use('/api/auth', authRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/diet', dietRoutes)
 app.use('/api/exercises', exerciseRoutes)

@@ -119,14 +119,61 @@ function emptyLog(uid, date) {
   }
 }
 
-function calcScore(log) {
+function macroTotals(meals = {}) {
+  return Object.values(meals).reduce((acc, items) => {
+    ;(items || []).forEach(item => {
+      acc.calories += Number(item.calories) || 0
+      acc.protein += Number(item.protein) || 0
+    })
+    return acc
+  }, { calories: 0, protein: 0 })
+}
+
+function getScoreTargets(user = {}) {
+  return {
+    calories: Number(user.dailyCalories) || 0,
+    protein: Number(user.proteinTarget) || 0,
+  }
+}
+
+function isDailyDietTargetComplete(log, userTargets = {}) {
+  if (!areDailyMealsComplete(log)) return false
+
+  const totals = macroTotals(log?.meals)
+  const caloriesEaten = Number(totals.calories || log?.totalCaloriesEaten) || 0
+
+  if (userTargets.calories > 0) {
+    const calorieRatio = caloriesEaten / userTargets.calories
+    if (calorieRatio < 0.85 || calorieRatio > 1.15) return false
+  }
+
+  if (userTargets.protein > 0 && totals.protein < userTargets.protein * 0.7) {
+    return false
+  }
+
+  return true
+}
+
+function calcScore(log, userTargets = {}) {
   let score = 0
   if (log.workoutDone) score += 25
+  if (isDailyDietTargetComplete(log, userTargets)) score += 20
   if ((log.waterGlasses ?? 0) >= 8) score += 15
-  if ((log.habits?.length ?? 0) >= 3) score += 25
-  if (log.mindDone) score += 15
-  if (log.challengesDone >= 1) score += 20
+  if ((log.habits?.length ?? 0) >= 3) score += 20
+  if (log.mindDone) score += 10
+  if (log.challengesDone >= 1) score += 10
   return Math.min(score, 100)
+}
+
+function areDailyMealsComplete(log) {
+  const meals = log?.meals || {}
+  return ['breakfast', 'lunch', 'dinner'].every(meal => (meals[meal]?.length ?? 0) > 0)
+    && ((meals.snacks?.length ?? 0) > 0 || (meals.snack?.length ?? 0) > 0)
+}
+
+async function getUserScoreTargets(uid) {
+  const user = await User.findOne({ uid }).select('dailyCalories proteinTarget').lean()
+  return getScoreTargets(user)
 }
 
 // GET /api/users/log/:date  (YYYY-MM-DD)
@@ -150,7 +197,7 @@ router.patch('/log/:date', async (req, res) => {
     // Recompute discipline score from merged data if partial fields provided
     const existing = await DailyLog.findOne({ uid: req.uid, date: req.params.date })
     const merged = { ...(existing?.toObject() ?? emptyLog(req.uid, req.params.date)), ...updates }
-    merged.disciplineScore = calcScore(merged)
+    merged.disciplineScore = calcScore(merged, await getUserScoreTargets(req.uid))
 
     const log = await DailyLog.findOneAndUpdate(
       { uid: req.uid, date: req.params.date },
@@ -170,7 +217,7 @@ router.patch('/log/:date/water', async (req, res) => {
     const existing = await DailyLog.findOne({ uid: req.uid, date: req.params.date })
     const base = existing?.toObject() ?? emptyLog(req.uid, req.params.date)
     const merged = { ...base, waterGlasses: glasses }
-    merged.disciplineScore = calcScore(merged)
+    merged.disciplineScore = calcScore(merged, await getUserScoreTargets(req.uid))
 
     const log = await DailyLog.findOneAndUpdate(
       { uid: req.uid, date: req.params.date },
@@ -193,7 +240,7 @@ router.patch('/log/:date/meal', async (req, res) => {
     meals[meal] = [...(meals[meal] ?? []), food]
     const totalCaloriesEaten = (base.totalCaloriesEaten ?? 0) + (food.calories ?? 0)
     const merged = { ...base, meals, totalCaloriesEaten }
-    merged.disciplineScore = calcScore(merged)
+    merged.disciplineScore = calcScore(merged, await getUserScoreTargets(req.uid))
 
     const log = await DailyLog.findOneAndUpdate(
       { uid: req.uid, date: req.params.date },
@@ -213,7 +260,7 @@ router.patch('/log/:date/workout', async (req, res) => {
     const existing = await DailyLog.findOne({ uid: req.uid, date: req.params.date })
     const base = existing?.toObject() ?? emptyLog(req.uid, req.params.date)
     const merged = { ...base, workout, workoutDone: true }
-    merged.disciplineScore = calcScore(merged)
+    merged.disciplineScore = calcScore(merged, await getUserScoreTargets(req.uid))
 
     const log = await DailyLog.findOneAndUpdate(
       { uid: req.uid, date: req.params.date },
@@ -233,7 +280,7 @@ router.patch('/log/:date/habits', async (req, res) => {
     const existing = await DailyLog.findOne({ uid: req.uid, date: req.params.date })
     const base = existing?.toObject() ?? emptyLog(req.uid, req.params.date)
     const merged = { ...base, habits }
-    merged.disciplineScore = calcScore(merged)
+    merged.disciplineScore = calcScore(merged, await getUserScoreTargets(req.uid))
 
     const log = await DailyLog.findOneAndUpdate(
       { uid: req.uid, date: req.params.date },

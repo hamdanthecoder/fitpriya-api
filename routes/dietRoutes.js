@@ -34,7 +34,8 @@ function weekStr() {
   return `${d.getFullYear()}-W${weekNum}`
 }
 
-async function checkAndIncrementUsage(uid, type) {
+async function checkAndIncrementUsage(uid, type, options = {}) {
+  const shouldIncrement = options.increment !== false
   const user = await User.findOne({ uid }).lean()
   const userPlan = user?.plan === 'pro' ? 'pro' : 'free'
   const limits = LIMITS[userPlan]
@@ -60,9 +61,12 @@ async function checkAndIncrementUsage(uid, type) {
     return { allowed: false, message: msg, code: userPlan === 'free' ? 'FREE_LIMIT' : 'RATE_LIMITED' }
   }
 
+  if (!shouldIncrement) {
+    return { allowed: true, remaining: limits[type] - (usage[type] || 0), usage, limits }
+  }
+
   // Increment
   usage[type] = (usage[type] || 0) + 1
-
   await User.findOneAndUpdate({ uid }, { $set: { dietUsage: usage } })
   return { allowed: true, remaining: limits[type] - usage[type] }
 }
@@ -120,14 +124,15 @@ router.post('/search', async (req, res) => {
       .substring(0, 200);
 
     // Rate limit check
-    const rateCheck = await checkAndIncrementUsage(req.uid, 'searches')
+    const rateCheck = await checkAndIncrementUsage(req.uid, 'searches', { increment: false })
     if (!rateCheck.allowed) {
       return res.status(429).json({ success: false, message: rateCheck.message, code: 'RATE_LIMITED' })
     }
 
     const user = await User.findOne({ uid: req.uid }).lean()
     const dietType = user?.dietType || 'any'
-    const { results, tokensUsed } = await searchFood(sanitizedQuery, dietType)
+    const { results, tokensUsed, source } = await searchFood(sanitizedQuery, dietType)
+    const usageUpdate = await checkAndIncrementUsage(req.uid, 'searches')
 
     // Format results for frontend
     const formatted = results.map((r, i) => ({
@@ -141,14 +146,15 @@ router.post('/search', async (req, res) => {
       fiber: Math.round((r.fiber || 0) * 10) / 10,
       dietType: r.diet_type || 'veg',
       confidence: r.confidence || 'medium',
-      source: 'ai',
+      source: source === 'fallback' ? 'local' : 'ai',
     }))
 
     res.json({
       success: true,
       results: formatted,
-      remaining: rateCheck.remaining,
+      remaining: usageUpdate.remaining,
       tokensUsed,
+      source: source || 'ai',
     })
   } catch (err) {
     console.error('[Diet Search Error]', err.message)

@@ -1,12 +1,33 @@
 const OpenAI = require('openai')
 
-const clientOptions = { apiKey: process.env.OPENAI_API_KEY }
-if (process.env.OPENAI_BASE_URL) {
-  clientOptions.baseURL = process.env.OPENAI_BASE_URL
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+let client
+
+function getClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not configured')
+  }
+
+  if (!client) {
+    const clientOptions = { apiKey: process.env.OPENAI_API_KEY }
+    if (process.env.OPENAI_BASE_URL) {
+      clientOptions.baseURL = process.env.OPENAI_BASE_URL
+    }
+    client = new OpenAI(clientOptions)
+  }
+
+  return client
 }
 
-const client = new OpenAI(clientOptions)
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+function logOpenAIError(scope, err) {
+  console.error(`[OpenAI ${scope} Error]`, {
+    name: err?.name,
+    status: err?.status,
+    code: err?.code,
+    type: err?.type,
+    message: err?.message,
+  })
+}
 
 // ─── FOOD SEARCH ─────────────────────────────────────────────────────────────
 
@@ -52,23 +73,87 @@ Rules:
 - If user mentions brand name, estimate based on typical packaged food nutrition`
 }
 
+const FALLBACK_FOODS = [
+  { keys: ['roti', 'chapati', 'phulka'], name_en: 'Roti', name_hi: 'Roti', serving_description: '1 medium roti', serving_size_g: 30, calories: 105, protein: 3.1, carbs: 21, fat: 0.8, fiber: 2.6, diet_type: 'veg' },
+  { keys: ['rice', 'chawal', 'plain rice'], name_en: 'Cooked rice', name_hi: 'Chawal', serving_description: '1 bowl cooked rice', serving_size_g: 150, calories: 195, protein: 4.1, carbs: 43, fat: 0.4, fiber: 0.6, diet_type: 'vegan' },
+  { keys: ['dal', 'daal', 'lentil'], name_en: 'Dal', name_hi: 'Dal', serving_description: '1 bowl dal', serving_size_g: 150, calories: 170, protein: 9, carbs: 26, fat: 4, fiber: 6, diet_type: 'veg' },
+  { keys: ['poha'], name_en: 'Poha with peanuts', name_hi: 'Poha', serving_description: '1 plate poha', serving_size_g: 200, calories: 330, protein: 8, carbs: 52, fat: 10, fiber: 4, diet_type: 'veg' },
+  { keys: ['idli'], name_en: 'Idli', name_hi: 'Idli', serving_description: '2 medium idli', serving_size_g: 120, calories: 150, protein: 5, carbs: 31, fat: 1, fiber: 2, diet_type: 'vegan' },
+  { keys: ['dosa'], name_en: 'Plain dosa', name_hi: 'Dosa', serving_description: '1 medium dosa', serving_size_g: 100, calories: 180, protein: 4, carbs: 32, fat: 5, fiber: 2, diet_type: 'vegan' },
+  { keys: ['paneer'], name_en: 'Paneer', name_hi: 'Paneer', serving_description: '100 g paneer', serving_size_g: 100, calories: 265, protein: 18, carbs: 4, fat: 20, fiber: 0, diet_type: 'veg' },
+  { keys: ['egg', 'eggs', 'anda'], name_en: 'Boiled egg', name_hi: 'Anda', serving_description: '1 large egg', serving_size_g: 50, calories: 78, protein: 6.3, carbs: 0.6, fat: 5.3, fiber: 0, diet_type: 'egg' },
+  { keys: ['chicken'], name_en: 'Chicken curry', name_hi: 'Chicken curry', serving_description: '1 bowl chicken curry', serving_size_g: 180, calories: 300, protein: 28, carbs: 8, fat: 18, fiber: 2, diet_type: 'non-veg' },
+  { keys: ['banana', 'kela'], name_en: 'Banana', name_hi: 'Kela', serving_description: '1 medium banana', serving_size_g: 118, calories: 105, protein: 1.3, carbs: 27, fat: 0.3, fiber: 3.1, diet_type: 'vegan' },
+  { keys: ['apple', 'seb'], name_en: 'Apple', name_hi: 'Seb', serving_description: '1 medium apple', serving_size_g: 180, calories: 95, protein: 0.5, carbs: 25, fat: 0.3, fiber: 4.4, diet_type: 'vegan' },
+  { keys: ['chai', 'tea'], name_en: 'Milk tea', name_hi: 'Chai', serving_description: '1 cup milk tea with sugar', serving_size_g: 180, calories: 110, protein: 3, carbs: 16, fat: 4, fiber: 0, diet_type: 'veg' },
+]
+
+function fitsDiet(food, dietType) {
+  if (!dietType || dietType === 'any') return true
+  if (dietType === 'vegan') return food.diet_type === 'vegan'
+  if (dietType === 'veg') return food.diet_type === 'veg' || food.diet_type === 'vegan'
+  if (dietType === 'egg') return food.diet_type === 'egg' || food.diet_type === 'veg' || food.diet_type === 'vegan'
+  return true
+}
+
+function scaleFood(food, query) {
+  const lower = query.toLowerCase()
+  const quantityMatch = lower.match(/\b(\d+(?:\.\d+)?)\b/)
+  const quantity = quantityMatch ? Number(quantityMatch[1]) : 1
+  const shouldScale = quantity > 0 && food.keys.some(key => lower.includes(key))
+  const factor = shouldScale ? quantity : 1
+
+  return {
+    name_en: food.name_en,
+    name_hi: food.name_hi,
+    serving_description: factor === 1 ? food.serving_description : `${factor} x ${food.serving_description}`,
+    serving_size_g: Math.round(food.serving_size_g * factor),
+    calories: Math.round(food.calories * factor),
+    protein: Math.round(food.protein * factor * 10) / 10,
+    carbs: Math.round(food.carbs * factor * 10) / 10,
+    fat: Math.round(food.fat * factor * 10) / 10,
+    fiber: Math.round(food.fiber * factor * 10) / 10,
+    diet_type: food.diet_type,
+    confidence: factor === 1 ? 'medium' : 'low',
+  }
+}
+
+function fallbackSearchFood(query, dietType) {
+  const lower = String(query || '').toLowerCase()
+  const matches = FALLBACK_FOODS
+    .filter(food => fitsDiet(food, dietType))
+    .filter(food => food.keys.some(key => lower.includes(key)))
+
+  const selected = matches.length ? matches : FALLBACK_FOODS.filter(food => fitsDiet(food, dietType)).slice(0, 3)
+  return {
+    results: selected.slice(0, 3).map(food => scaleFood(food, lower)),
+    tokensUsed: 0,
+    source: 'fallback',
+  }
+}
+
 async function searchFood(query, dietType) {
-  const response = await client.chat.completions.create({
-    model: OPENAI_MODEL,
-    messages: [
-      { role: 'system', content: FOOD_SEARCH_SYSTEM },
-      { role: 'user', content: buildFoodSearchPrompt(query, dietType) },
-    ],
-    response_format: { type: 'json_object' },
-    temperature: 0.3,
-    max_tokens: 800,
-  })
+  try {
+    const response = await getClient().chat.completions.create({
+      model: OPENAI_MODEL,
+      messages: [
+        { role: 'system', content: FOOD_SEARCH_SYSTEM },
+        { role: 'user', content: buildFoodSearchPrompt(query, dietType) },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+      max_tokens: 800,
+    })
 
-  const content = response.choices[0]?.message?.content
-  const parsed = JSON.parse(content)
-  const tokensUsed = response.usage?.total_tokens ?? 0
+    const content = response.choices[0]?.message?.content
+    const parsed = JSON.parse(content)
+    const tokensUsed = response.usage?.total_tokens ?? 0
 
-  return { results: parsed.results || [], tokensUsed }
+    return { results: parsed.results || [], tokensUsed, source: 'ai' }
+  } catch (err) {
+    logOpenAIError('Food Search', err)
+    return fallbackSearchFood(query, dietType)
+  }
 }
 
 // ─── MEAL PLAN GENERATOR ─────────────────────────────────────────────────────
@@ -164,7 +249,7 @@ STRICT RULES:
 }
 
 async function generateMealPlan(profile) {
-  const response = await client.chat.completions.create({
+  const response = await getClient().chat.completions.create({
     model: OPENAI_MODEL,
     messages: [
       { role: 'system', content: MEAL_PLAN_SYSTEM },
@@ -247,7 +332,7 @@ Rules:
 }
 
 async function suggestMeals(remaining, mealType, dietType) {
-  const response = await client.chat.completions.create({
+  const response = await getClient().chat.completions.create({
     model: OPENAI_MODEL,
     messages: [
       { role: 'system', content: SUGGEST_SYSTEM },
