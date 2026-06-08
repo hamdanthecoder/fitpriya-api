@@ -24,20 +24,23 @@ async function verifyFirebaseTokenAllowUnverified(req, res, next) {
 
 router.post('/send-verification-email', verifyFirebaseTokenAllowUnverified, async (req, res) => {
   try {
-    if (!req.email) {
+    const firebaseUser = await admin.auth().getUser(req.uid)
+    const email = firebaseUser.email || req.email
+
+    if (!email) {
       return res.status(400).json({ success: false, message: 'No email found for this account' })
     }
 
-    if (req.emailVerified) {
+    if (firebaseUser.emailVerified || req.emailVerified) {
       return res.json({ success: true, alreadyVerified: true })
     }
 
-    const link = await admin.auth().generateEmailVerificationLink(req.email, {
+    const link = await admin.auth().generateEmailVerificationLink(email, {
       url: process.env.EMAIL_VERIFICATION_CONTINUE_URL || 'https://fitpriya.online/email-verified',
       handleCodeInApp: false,
     })
 
-    const result = await sendVerificationEmail({ to: req.email, link })
+    const result = await sendVerificationEmail({ to: email, link })
     if (!result.configured) {
       return res.status(503).json({
         success: false,
@@ -49,9 +52,9 @@ router.post('/send-verification-email', verifyFirebaseTokenAllowUnverified, asyn
     return res.json({ success: true, provider: result.provider })
   } catch (err) {
     console.error('[Auth] custom verification email failed:', err.message)
-    return res.status(500).json({
+    return res.status(502).json({
       success: false,
-      message: 'Could not send verification email',
+      message: err.message || 'Could not send verification email',
     })
   }
 })
@@ -90,9 +93,9 @@ router.post('/send-password-reset-email', async (req, res) => {
     return res.json({ success: true, provider: result.provider })
   } catch (err) {
     console.error('[Auth] custom password reset email failed:', err.message)
-    return res.status(500).json({
+    return res.status(502).json({
       success: false,
-      message: 'Could not send reset email',
+      message: err.message || 'Could not send reset email',
     })
   }
 })
