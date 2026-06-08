@@ -1,5 +1,6 @@
 const express = require('express')
 const router = express.Router()
+const admin = require('firebase-admin')
 const verifyToken = require('../middleware/auth')
 const User = require('../models/User')
 const DailyLog = require('../models/DailyLog')
@@ -429,13 +430,26 @@ router.get('/stats', async (req, res) => {
 // DELETE /api/users/account
 router.delete('/account', async (req, res) => {
   try {
+    try {
+      await admin.auth().deleteUser(req.uid)
+    } catch (authErr) {
+      if (authErr.code !== 'auth/user-not-found') {
+        throw authErr
+      }
+    }
+
     await Promise.all([
       User.deleteOne({ uid: req.uid }),
       DailyLog.deleteMany({ uid: req.uid }),
       WeightLog.deleteMany({ uid: req.uid }),
       WorkoutHistory.deleteMany({ uid: req.uid }),
     ])
-    res.json({ success: true, message: 'Account data deleted' })
+
+    res.json({
+      success: true,
+      message: 'Account and Firebase user deleted',
+      data: { appDataDeleted: true, firebaseUserDeleted: true },
+    })
   } catch (err) {
     res.status(500).json({ success: false, message: err.message })
   }
