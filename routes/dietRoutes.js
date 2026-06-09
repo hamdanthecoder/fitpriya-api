@@ -14,6 +14,12 @@ const LIMITS = {
   pro:  { searches: 50, suggestions: 5, plans: 2 },
 }
 
+function isActivePro(user) {
+  if (user?.plan !== 'pro') return false
+  if (!user.planExpiresAt) return true
+  return new Date(user.planExpiresAt) >= new Date()
+}
+
 const EMPTY_USAGE = {
   searches: 0,
   suggestions: 0,
@@ -37,7 +43,10 @@ function weekStr() {
 async function checkAndIncrementUsage(uid, type, options = {}) {
   const shouldIncrement = options.increment !== false
   const user = await User.findOne({ uid }).lean()
-  const userPlan = user?.plan === 'pro' ? 'pro' : 'free'
+  const userPlan = isActivePro(user) ? 'pro' : 'free'
+  if (user?.plan === 'pro' && userPlan === 'free') {
+    await User.findOneAndUpdate({ uid }, { $set: { plan: 'free', planExpiresAt: null } })
+  }
   const limits = LIMITS[userPlan]
   const usage = normalizeUsage(user?.dietUsage)
 
@@ -91,7 +100,7 @@ function normalizeUsage(raw = {}) {
 }
 
 function getUserPlan(user) {
-  return user?.plan === 'pro' ? 'pro' : 'free'
+  return isActivePro(user) ? 'pro' : 'free'
 }
 
 function planLimitError(userPlan, limits) {

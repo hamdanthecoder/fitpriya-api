@@ -23,7 +23,7 @@ module.exports = async function requirePro(req, res, next) {
     // Check expiry
     if (user.planExpiresAt && new Date(user.planExpiresAt) < new Date()) {
       // Auto-downgrade expired plan
-      await User.findOneAndUpdate({ uid: req.uid }, { $set: { plan: 'free' } })
+      await User.findOneAndUpdate({ uid: req.uid }, { $set: { plan: 'free', planExpiresAt: null } })
       return res.status(403).json({
         success: false,
         message: 'Your Pro plan has expired. Please renew.',

@@ -16,6 +16,21 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+function isExpiredPro(user) {
+  return user?.plan === 'pro' && user.planExpiresAt && new Date(user.planExpiresAt) < new Date()
+}
+
+async function normalizeExpiredPlan(user) {
+  if (!isExpiredPro(user)) return user
+  const updated = await User.findOneAndUpdate(
+    { uid: user.uid },
+    { $set: { plan: 'free', planExpiresAt: null } },
+    { new: true }
+  )
+  const fallback = typeof user.toObject === 'function' ? user.toObject() : user
+  return updated || { ...fallback, plan: 'free', planExpiresAt: null }
+}
+
 function calcStreak(lastDate, current) {
   if (!lastDate) return 1
   const today = todayStr()
@@ -33,6 +48,7 @@ router.get('/profile', async (req, res) => {
   try {
     let user = await User.findOne({ uid: req.uid })
     if (!user) return res.json({ success: true, data: null })
+    user = await normalizeExpiredPlan(user)
     res.json({ success: true, data: user })
   } catch (err) {
     res.status(500).json({ success: false, message: err.message })
