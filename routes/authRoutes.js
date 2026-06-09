@@ -52,8 +52,10 @@ router.post('/send-verification-email', verifyFirebaseTokenAllowUnverified, asyn
     return res.json({ success: true, provider: result.provider })
   } catch (err) {
     console.error('[Auth] custom verification email failed:', err.message)
-    return res.status(502).json({
+    const status = err.status || 502
+    return res.status(status).json({
       success: false,
+      code: err.code || 'email-provider-failed',
       message: err.message || 'Could not send verification email',
     })
   }
@@ -93,8 +95,10 @@ router.post('/send-password-reset-email', async (req, res) => {
     return res.json({ success: true, provider: result.provider })
   } catch (err) {
     console.error('[Auth] custom password reset email failed:', err.message)
-    return res.status(502).json({
+    const status = err.status || 502
+    return res.status(status).json({
       success: false,
+      code: err.code || 'email-provider-failed',
       message: err.message || 'Could not send reset email',
     })
   }

@@ -103,6 +103,113 @@ function planLimitError(userPlan, limits) {
 
 // ─── POST /api/diet/search ───────────────────────────────────────────────────
 
+const FALLBACK_MEALS = {
+  veg: {
+    breakfast: [
+      { name: 'Poha with peanuts and curd', calories: 420, protein: 15, carbs: 62, fat: 12, prep_time: '15 min' },
+      { name: 'Paneer bhurji with 2 roti', calories: 480, protein: 26, carbs: 42, fat: 22, prep_time: '20 min' },
+      { name: 'Vegetable upma with curd', calories: 400, protein: 14, carbs: 58, fat: 11, prep_time: '15 min' },
+    ],
+    lunch: [
+      { name: 'Dal, 2 roti, sabzi, and salad', calories: 560, protein: 24, carbs: 78, fat: 14, prep_time: '25 min' },
+      { name: 'Rajma chawal with cucumber salad', calories: 610, protein: 22, carbs: 96, fat: 12, prep_time: '30 min' },
+      { name: 'Paneer rice bowl with salad', calories: 640, protein: 30, carbs: 72, fat: 22, prep_time: '25 min' },
+    ],
+    dinner: [
+      { name: 'Moong dal khichdi with curd', calories: 460, protein: 20, carbs: 66, fat: 12, prep_time: '20 min' },
+      { name: 'Paneer tikka with 2 roti and salad', calories: 520, protein: 28, carbs: 42, fat: 24, prep_time: '25 min' },
+      { name: 'Dal soup, roti, and sauteed vegetables', calories: 480, protein: 22, carbs: 58, fat: 14, prep_time: '25 min' },
+    ],
+    snack: [
+      { name: 'Fruit with roasted chana', calories: 240, protein: 10, carbs: 42, fat: 4, prep_time: '5 min' },
+      { name: 'Hung curd bowl with fruit', calories: 220, protein: 18, carbs: 24, fat: 6, prep_time: '5 min' },
+      { name: 'Sprouts chaat', calories: 260, protein: 14, carbs: 38, fat: 6, prep_time: '10 min' },
+    ],
+  },
+  non_veg: {
+    breakfast: [
+      { name: '2 egg omelette with 2 roti', calories: 390, protein: 22, carbs: 38, fat: 15, prep_time: '15 min' },
+      { name: 'Egg bhurji with toast', calories: 430, protein: 24, carbs: 42, fat: 17, prep_time: '15 min' },
+      { name: 'Chicken sandwich with curd', calories: 460, protein: 30, carbs: 44, fat: 14, prep_time: '15 min' },
+    ],
+    lunch: [
+      { name: 'Chicken curry with rice and salad', calories: 620, protein: 38, carbs: 70, fat: 18, prep_time: '30 min' },
+      { name: 'Grilled chicken, dal, 2 roti, and salad', calories: 650, protein: 45, carbs: 62, fat: 18, prep_time: '30 min' },
+      { name: 'Fish curry with rice and vegetables', calories: 600, protein: 38, carbs: 68, fat: 16, prep_time: '25 min' },
+    ],
+    dinner: [
+      { name: 'Grilled fish with dal and vegetables', calories: 500, protein: 40, carbs: 35, fat: 18, prep_time: '25 min' },
+      { name: 'Chicken tikka with roti and salad', calories: 520, protein: 42, carbs: 38, fat: 18, prep_time: '25 min' },
+      { name: 'Egg curry with 2 roti and salad', calories: 520, protein: 26, carbs: 48, fat: 22, prep_time: '25 min' },
+    ],
+    snack: [
+      { name: 'Boiled eggs with fruit', calories: 260, protein: 16, carbs: 28, fat: 9, prep_time: '8 min' },
+      { name: 'Curd bowl with roasted chana', calories: 250, protein: 16, carbs: 30, fat: 7, prep_time: '5 min' },
+      { name: 'Chicken soup', calories: 220, protein: 24, carbs: 14, fat: 7, prep_time: '15 min' },
+    ],
+  },
+  vegan: {
+    breakfast: [
+      { name: 'Vegetable poha with peanuts', calories: 410, protein: 12, carbs: 62, fat: 13, prep_time: '15 min' },
+      { name: 'Besan chilla with chutney', calories: 430, protein: 18, carbs: 48, fat: 16, prep_time: '20 min' },
+      { name: 'Oats with banana and peanut butter', calories: 450, protein: 14, carbs: 65, fat: 15, prep_time: '10 min' },
+    ],
+    lunch: [
+      { name: 'Rajma chawal with salad', calories: 610, protein: 22, carbs: 96, fat: 12, prep_time: '30 min' },
+      { name: 'Chana masala with 2 roti and salad', calories: 600, protein: 24, carbs: 82, fat: 14, prep_time: '30 min' },
+      { name: 'Tofu rice bowl with vegetables', calories: 590, protein: 28, carbs: 70, fat: 18, prep_time: '25 min' },
+    ],
+    dinner: [
+      { name: 'Moong dal khichdi with vegetables', calories: 470, protein: 20, carbs: 68, fat: 12, prep_time: '20 min' },
+      { name: 'Tofu bhurji with 2 roti', calories: 520, protein: 30, carbs: 48, fat: 20, prep_time: '25 min' },
+      { name: 'Dal soup with roti and salad', calories: 460, protein: 20, carbs: 60, fat: 12, prep_time: '20 min' },
+    ],
+    snack: [
+      { name: 'Fruit with roasted peanuts', calories: 260, protein: 8, carbs: 36, fat: 10, prep_time: '5 min' },
+      { name: 'Sprouts chaat', calories: 260, protein: 14, carbs: 38, fat: 6, prep_time: '10 min' },
+      { name: 'Peanut chikki with fruit', calories: 280, protein: 8, carbs: 42, fat: 9, prep_time: '5 min' },
+    ],
+  },
+}
+
+function dietBucket(dietType = 'veg') {
+  const d = String(dietType).toLowerCase()
+  if (d.includes('vegan')) return 'vegan'
+  if (d.includes('non') || d.includes('chicken') || d.includes('fish') || d.includes('egg')) return 'non_veg'
+  return 'veg'
+}
+
+function scaleMeal(meal, targetCalories) {
+  const factor = Math.max(0.75, Math.min(1.35, targetCalories / Math.max(1, meal.calories)))
+  return {
+    ...meal,
+    calories: Math.round(meal.calories * factor),
+    protein: Math.round(meal.protein * factor),
+    carbs: Math.round(meal.carbs * factor),
+    fat: Math.round(meal.fat * factor),
+  }
+}
+
+function generateFallbackMealPlan(profile = {}) {
+  let calories = Number(profile.dailyCalories) || 1800
+  if (calories < 1000 || calories > 5000) calories = 1800
+  const meals = FALLBACK_MEALS[dietBucket(profile.dietType)] || FALLBACK_MEALS.veg
+  const targets = {
+    breakfast: Math.round(calories * 0.25),
+    lunch: Math.round(calories * 0.35),
+    dinner: Math.round(calories * 0.30),
+    snack: Math.round(calories * 0.10),
+  }
+
+  return Array.from({ length: 7 }, (_, i) => ({
+    day: i + 1,
+    breakfast: scaleMeal(meals.breakfast[i % meals.breakfast.length], targets.breakfast),
+    lunch: scaleMeal(meals.lunch[i % meals.lunch.length], targets.lunch),
+    dinner: scaleMeal(meals.dinner[i % meals.dinner.length], targets.dinner),
+    snack: scaleMeal(meals.snack[i % meals.snack.length], targets.snack),
+  }))
+}
+
 router.post('/search', async (req, res) => {
   try {
     const { query } = req.body
@@ -174,30 +281,68 @@ router.post('/meal-plan', async (req, res) => {
     const userPlan = getUserPlan(profile)
     const limits = LIMITS[userPlan]
     const usage = normalizeUsage(profile?.dietUsage)
+    const hasStoredPlan = Array.isArray(profile?.currentPlan?.days) && profile.currentPlan.days.length > 0
+    const allowMissingPlanRecovery = userPlan === 'free' && usage.plans >= limits.plans && !hasStoredPlan
 
-    if (usage.plans >= limits.plans) {
+    if (usage.plans >= limits.plans && hasStoredPlan) {
+      return res.json({
+        success: true,
+        plan: profile.currentPlan,
+        remaining: 0,
+        tokensUsed: 0,
+        source: profile.currentPlan.source || 'stored',
+        restored: true,
+      })
+    }
+
+    if (usage.plans >= limits.plans && !allowMissingPlanRecovery) {
       return res.status(429).json(planLimitError(userPlan, limits))
     }
 
-    // Generate the plan
-    const { plan, tokensUsed } = await generateMealPlan(profile)
-
-    // Increment ONLY after success
-    usage.plans = (usage.plans || 0) + 1
-    await User.findOneAndUpdate({ uid: req.uid }, { $set: { dietUsage: usage } })
+    // Generate the plan. If AI is unavailable, provide a deterministic emergency
+    // plan so first-time users are not blocked by provider/network issues.
+    let plan
+    let tokensUsed = 0
+    let source = 'ai'
+    try {
+      const result = await generateMealPlan(profile)
+      plan = result.plan
+      tokensUsed = result.tokensUsed
+    } catch (generationErr) {
+      console.error('[Meal Plan AI Fallback]', generationErr.message)
+      plan = generateFallbackMealPlan(profile)
+      source = 'fallback'
+    }
 
     const response = {
       generatedAt: new Date().toISOString(),
       days: plan,
       userCalories: profile.dailyCalories || 1800,
       userDietType: profile.dietType || 'veg',
+      source,
     }
+
+    // Increment/store ONLY after a plan exists. Recovery keeps free usage at 1
+    // instead of charging a second generation for old stuck accounts.
+    usage.plans = allowMissingPlanRecovery ? Math.max(usage.plans || 0, 1) : (usage.plans || 0) + 1
+    await User.findOneAndUpdate(
+      { uid: req.uid },
+      {
+        $set: {
+          dietUsage: usage,
+          currentPlan: response,
+          planGeneratedAt: response.generatedAt,
+        },
+      }
+    )
 
     res.json({
       success: true,
       plan: response,
       remaining: limits.plans - usage.plans,
       tokensUsed,
+      source,
+      recovered: allowMissingPlanRecovery,
     })
   } catch (err) {
     console.error('[Meal Plan Error]', err.message)

@@ -65,9 +65,21 @@ router.post('/profile', async (req, res) => {
 // PATCH /api/users/profile  (partial update, no counter protection)
 router.patch('/profile', async (req, res) => {
   try {
+    const updates = { ...req.body }
+    if (updates.notifications && typeof updates.notifications === 'object') {
+      const existing = await User.findOne({ uid: req.uid }).select('notifications').lean()
+      updates.notifications = {
+        ...(existing?.notifications || {}),
+        ...updates.notifications,
+        mealTimes: {
+          ...(existing?.notifications?.mealTimes || {}),
+          ...(updates.notifications.mealTimes || {}),
+        },
+      }
+    }
     const user = await User.findOneAndUpdate(
       { uid: req.uid },
-      { $set: req.body },
+      { $set: updates },
       { new: true, upsert: true }
     )
     res.json({ success: true, data: user })

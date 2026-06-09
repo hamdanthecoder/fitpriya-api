@@ -112,7 +112,10 @@ async function sendWithResend({ to, subject, html, text }) {
 
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
-    throw new Error(body?.message || body?.error || 'Email provider failed')
+    const err = new Error(body?.message || body?.error || 'Email provider failed')
+    err.status = res.status
+    err.code = body?.name || body?.code || body?.error || 'email-provider-failed'
+    throw err
   }
 
   return { configured: true, provider: 'resend', id: body.id }

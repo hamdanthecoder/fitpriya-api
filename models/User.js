@@ -56,6 +56,24 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed,
     default: { searches: 0, suggestions: 0, plans: 0, lastReset: null, lastPlanReset: null }
   },
+  notifications: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {
+      workout: true,
+      workoutTime: '07:00',
+      water: true,
+      waterIntervalHours: 2,
+      meals: true,
+      mealTimes: {
+        breakfast: '08:00',
+        lunch: '13:00',
+        snack: '17:00',
+        dinner: '20:00',
+      },
+      streak: true,
+      coachMessages: true,
+    }
+  },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 })
