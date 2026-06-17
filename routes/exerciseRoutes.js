@@ -144,7 +144,8 @@ async function buildMediaMap() {
 router.get('/media', async (req, res) => {
   try {
     const now = Date.now()
-    if (mediaCache && now - mediaCache.cachedAt < CACHE_TTL_MS) {
+    const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
+    if (!forceRefresh && mediaCache && now - mediaCache.cachedAt < CACHE_TTL_MS) {
       return res.json({ success: true, data: mediaCache.data, cached: true })
     }
 
