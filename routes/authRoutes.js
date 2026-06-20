@@ -1,9 +1,22 @@
 const express = require('express')
-const admin = require('firebase-admin')
-require('../middleware/auth')
 const { sendPasswordResetEmail, sendVerificationEmail } = require('../services/emailService')
+const { getFirebaseAuth } = require('../utils/firebaseAdmin')
 
 const router = express.Router()
+
+const firebaseAuthLinkDomain =
+  process.env.FIREBASE_AUTH_LINK_DOMAIN ||
+  process.env.FIREBASE_HOSTING_DOMAIN ||
+  process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ||
+  'fitnes-priya-app.firebaseapp.com'
+
+function getFirebaseActionCodeSettings(continueUrl) {
+  return {
+    url: continueUrl,
+    handleCodeInApp: false,
+    linkDomain: firebaseAuthLinkDomain,
+  }
+}
 
 async function verifyFirebaseTokenAllowUnverified(req, res, next) {
   const header = req.headers.authorization
@@ -12,7 +25,7 @@ async function verifyFirebaseTokenAllowUnverified(req, res, next) {
   }
 
   try {
-    const decoded = await admin.auth().verifyIdToken(header.split(' ')[1])
+    const decoded = await getFirebaseAuth().verifyIdToken(header.split(' ')[1])
     req.uid = decoded.uid
     req.email = decoded.email ?? ''
     req.emailVerified = decoded.email_verified === true
@@ -24,7 +37,7 @@ async function verifyFirebaseTokenAllowUnverified(req, res, next) {
 
 router.post('/send-verification-email', verifyFirebaseTokenAllowUnverified, async (req, res) => {
   try {
-    const firebaseUser = await admin.auth().getUser(req.uid)
+    const firebaseUser = await getFirebaseAuth().getUser(req.uid)
     const email = firebaseUser.email || req.email
 
     if (!email) {
@@ -35,10 +48,12 @@ router.post('/send-verification-email', verifyFirebaseTokenAllowUnverified, asyn
       return res.json({ success: true, alreadyVerified: true })
     }
 
-    const link = await admin.auth().generateEmailVerificationLink(email, {
-      url: process.env.EMAIL_VERIFICATION_CONTINUE_URL || 'https://fitpriya.online/email-verified',
-      handleCodeInApp: false,
-    })
+    const link = await getFirebaseAuth().generateEmailVerificationLink(
+      email,
+      getFirebaseActionCodeSettings(
+        process.env.EMAIL_VERIFICATION_CONTINUE_URL || 'https://fitpriya.online/email-verified',
+      ),
+    )
 
     const result = await sendVerificationEmail({ to: email, link })
     if (!result.configured) {
@@ -68,7 +83,7 @@ router.post('/send-password-reset-email', async (req, res) => {
   }
 
   try {
-    await admin.auth().getUserByEmail(email)
+    await getFirebaseAuth().getUserByEmail(email)
   } catch (err) {
     if (err.code === 'auth/user-not-found') {
       return res.json({ success: true })
@@ -78,10 +93,12 @@ router.post('/send-password-reset-email', async (req, res) => {
   }
 
   try {
-    const link = await admin.auth().generatePasswordResetLink(email, {
-      url: process.env.EMAIL_RESET_CONTINUE_URL || 'https://fitpriya.online/password-reset',
-      handleCodeInApp: false,
-    })
+    const link = await getFirebaseAuth().generatePasswordResetLink(
+      email,
+      getFirebaseActionCodeSettings(
+        process.env.EMAIL_RESET_CONTINUE_URL || 'https://fitpriya.online/password-reset',
+      ),
+    )
 
     const result = await sendPasswordResetEmail({ to: email, link })
     if (!result.configured) {

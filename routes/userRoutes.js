@@ -1,12 +1,12 @@
 const express = require('express')
 const router = express.Router()
-const admin = require('firebase-admin')
 const verifyToken = require('../middleware/auth')
 const User = require('../models/User')
 const DailyLog = require('../models/DailyLog')
 const WeightLog = require('../models/WeightLog')
 const WorkoutHistory = require('../models/WorkoutHistory')
 const { getPersonalisedHabits } = require('../data/habits')
+const { getFirebaseAuth } = require('../utils/firebaseAdmin')
 
 // All routes require auth
 router.use(verifyToken)
@@ -459,7 +459,7 @@ router.get('/stats', async (req, res) => {
 router.delete('/account', async (req, res) => {
   try {
     try {
-      await admin.auth().deleteUser(req.uid)
+      await getFirebaseAuth().deleteUser(req.uid)
     } catch (authErr) {
       if (authErr.code !== 'auth/user-not-found') {
         throw authErr

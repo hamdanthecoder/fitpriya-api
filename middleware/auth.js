@@ -1,25 +1,4 @@
-const admin = require('firebase-admin')
-
-// Initialize Firebase Admin once
-if (!admin.apps.length) {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
-  let serviceAccount = null
-  if (raw) {
-    // Accept both plain JSON and base64-encoded JSON (base64 is easier to paste into Render)
-    try {
-      serviceAccount = JSON.parse(raw)
-    } catch {
-      try {
-        serviceAccount = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'))
-      } catch {}
-    }
-  }
-  if (serviceAccount) {
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) })
-  } else {
-    admin.initializeApp()
-  }
-}
+const { getFirebaseAuth } = require('../utils/firebaseAdmin')
 
 module.exports = async function verifyToken(req, res, next) {
   const header = req.headers.authorization
@@ -28,7 +7,7 @@ module.exports = async function verifyToken(req, res, next) {
   }
   const token = header.split(' ')[1]
   try {
-    const decoded = await admin.auth().verifyIdToken(token)
+    const decoded = await getFirebaseAuth().verifyIdToken(token)
     const provider = decoded.firebase?.sign_in_provider
     if (provider === 'password' && decoded.email_verified === false) {
       return res.status(403).json({
